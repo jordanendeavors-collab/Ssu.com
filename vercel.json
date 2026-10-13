@@ -1,7 +1,0 @@
-{
-  "cleanUrls": true,
-  "redirects": [
-    { "source": "/training", "destination": "/hub/hub-training.html", "permanent": false },
-    { "source": "/hub/site", "destination": "/", "permanent": false }
-  ]
-}
