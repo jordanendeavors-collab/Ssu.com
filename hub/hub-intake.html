@@ -430,6 +430,17 @@ body.helpon .fhelp{display:block}
 @media print{#ddHubChip{display:none}}
 body.dd-locked #ddHubChip{display:none}
 
+
+/* ---- added: residential / commercial track ---- */
+.trkrow{display:flex;gap:8px;margin:10px 0 6px}
+.trk{flex:1;padding:11px 10px;border-radius:10px;border:1.5px solid var(--line,#D3D9E2);
+ background:#fff;font:700 13px/1.2 Calibri,Arial,sans-serif;color:#45525F;cursor:pointer}
+.trk.on{background:#0B1F3A;border-color:#0B1F3A;color:#fff}
+.trkpromo{margin:4px 0 10px;padding:11px 13px;border-radius:10px;background:#FBF4E6;
+ border-left:4px solid #CC0000;font:400 12.5px/1.5 Calibri,Arial,sans-serif;color:#12181F}
+.trknote{margin:4px 0 10px;padding:10px 13px;border-radius:10px;background:#F2F5F9;
+ border-left:4px solid #C8A951;font:400 12.5px/1.5 Calibri,Arial,sans-serif;color:#45525F}
+
 </style>
 <script>
 /* field error trap: surfaces any script failure instead of dying silently */
@@ -510,6 +521,8 @@ window.addEventListener('error', function (e) {
       <h2>STEP 1 OF 5</h2>
       <h1>Site &amp; Contact Info</h1>
       <p class="help">Same header data captured by Fulcrum Sales Quote Survey. All fields with <span style="color:var(--red)">*</span> are required.</p>
+<div id="ddTrackBar"></div>
+
 <div class="notice"><span class="nh">Open here. Every time.</span>
   <span class="say">&ldquo;Are you safe? Are you in a secure location? Is everything okay?&rdquo;</span>
   Wellbeing before business. Identify yourself, your company and your purpose inside ten seconds.
@@ -1980,12 +1993,65 @@ function ddOverheadCovered() {
   return n;
 }
 
+
+/* ---------------------------------------------------------------
+   One intake, two tracks.
+   A job starts residential. It becomes a commercial account the
+   moment any of four things is true: over 4,000 sq ft, four or more
+   cameras, PoE cameras, or a recorder in scope. Nobody decides that
+   in the field - the form decides it and says so.
+   --------------------------------------------------------------- */
+function ddTrack(){
+  var picked = "res";
+  try { picked = localStorage.getItem("dd.intake.track") || "res"; } catch(e){}
+  var why = [];
+  try {
+    ddFlags().forEach(function(f){
+      if (f.hit && (f.k==="sqft" || f.k==="cams" || f.k==="poe" || f.k==="svr"))
+        why.push(f.title);
+    });
+  } catch(e){}
+  return { picked: picked,
+           commercial: picked === "com" || why.length > 0,
+           promoted: picked === "res" && why.length > 0,
+           why: why };
+}
+function ddSetTrack(v){
+  try { localStorage.setItem("dd.intake.track", v); } catch(e){}
+  try { ddTrackPaint(); } catch(e){}
+  try { ddRender(); } catch(e){}
+}
+function ddTrackPaint(){
+  var t = ddTrack();
+  var host = document.getElementById("ddTrackBar");
+  if (!host) return;
+  var resOn = !t.commercial, comOn = t.commercial;
+  var h = '<div class="trkrow">'+
+    '<button type="button" class="trk'+(resOn?' on':'')+'" onclick="ddSetTrack(\'res\')">'+
+      '\u2302 Residential</button>'+
+    '<button type="button" class="trk'+(comOn?' on':'')+'" onclick="ddSetTrack(\'com\')">'+
+      '\u229E Commercial</button></div>';
+  if (t.promoted){
+    h += '<div class="trkpromo"><b>This is now a commercial account.</b> '+
+         t.why.join(" \u00b7 ") + '. The commercial questions are open and the '+
+         'residential bundle pricing no longer applies. Nothing you have entered is lost.</div>';
+  } else if (!t.commercial){
+    h += '<div class="trknote">Residential. It becomes a commercial account by itself if the '+
+         'site goes over 4,000 sq ft, reaches four cameras, or takes PoE cameras or a recorder.</div>';
+  }
+  host.innerHTML = h;
+}
+
 function ddFlags() {
   var d = state.data || {}, c = state.chips || {}, t = state.types || [];
   var sq = Math.max(ddNum(d.int_sqft), ddNum(d.fir_sqft), ddNum(d.ins_sqft));
   var camsDrawn = ddDeviceCount(['camera', 'ptz']);
   var cams = Math.max(ddNum(d.vid_count), camsDrawn);
   var hasAccess = t.indexOf('access') >= 0 || ddNum(d.acc_doors) > 0 || ddDeviceCount(['reader']) > 0;
+  /* Anything here turns a residential job into a commercial account. */
+  var blob = JSON.stringify(d).toLowerCase() + ' ' + JSON.stringify(c).toLowerCase();
+  var hasPoe = (c.vid_power === 'PoE') || /\bpoe\b/.test(blob);
+  var hasSvr = (c.vid_rec === 'SVR') || /\bsvr\b|\bnvr\b|stream video recorder/.test(blob);
   var hasFire = t.indexOf('fire') >= 0 || t.indexOf('inspection') >= 0;
   var hasGates = t.indexOf('gates') >= 0;
 
@@ -2001,7 +2067,16 @@ function ddFlags() {
                + 'At this count a card in the camera may be enough; confirm retention with the member before assuming a recorder.')
             : 'No cameras in scope yet.' },
 
-    { k: 'access', hit: hasAccess, title: 'Access control custom form',
+    { k: 'poe', hit: hasPoe, title: 'PoE cameras in scope',
+  on: 'PoE cameras are in scope. That is a commercial account \u2014 it needs network '
+    + 'infrastructure, switch capacity and cable paths that are not designed in the field. '
+    + 'Escalate before you quote.',
+  off: 'No PoE cameras in scope.' },
+  { k: 'svr', hit: hasSvr, title: 'Recorder in scope',
+  on: 'A stream video recorder is in scope. That is a commercial account. Confirm retention '
+    + 'and storage with design before anybody quotes it.',
+  off: 'No recorder in scope.' },
+  { k: 'access', hit: hasAccess, title: 'Access control custom form',
       on: 'Access control is in scope. The custom scope form is required — no verbal scoping, no exceptions. Egress and fire-release arrangements are not designed in the field.',
       off: 'No access control in scope.' },
 
@@ -4568,6 +4643,14 @@ var DDC = (function () {
   else document.addEventListener('DOMContentLoaded', function(){ setTimeout(chip,400); });
 })();
 
+</script>
+
+<script>
+(function(){ function go(){ try{ ddTrackPaint(); }catch(e){} }
+  if(document.readyState!=="loading") setTimeout(go,700);
+  else document.addEventListener("DOMContentLoaded",function(){setTimeout(go,700);});
+  document.addEventListener("ddauth:open",function(){setTimeout(go,400);});
+})();
 </script>
 </body>
 </html>
