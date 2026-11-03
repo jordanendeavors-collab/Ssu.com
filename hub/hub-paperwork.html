@@ -335,6 +335,16 @@ body.dd-locked #ddHubChip{display:none}
     </div>
 
     <div class="sec">
+      <div class="sec-hdr"><span class="badge">CHANGE</span><h3>Changes from the work order</h3></div>
+      <label class="opt"><input type="checkbox" id="p_wochg"><span>Something on this job is different from the work order
+        <small>Equipment added, removed or swapped, or the scope changed on site</small></span></label>
+      <div class="fld"><label>What changed, and why</label>
+        <textarea id="p_wowhat" placeholder="e.g. Work order called for 2 door sensors, installed 3. Third door found on walk-through."></textarea></div>
+      <div class="note"><span class="nh">Provider Services needs this the same day</span>
+        Tap <b>Copy as text</b> and send it to your coordinator. A change that is not reported does not match the work order at close-out.</div>
+    </div>
+
+    <div class="sec">
       <div class="sec-hdr"><span class="badge">OPEN</span><h3>Anything left open</h3></div>
       <div class="fld"><label>What is not finished</label>
         <textarea id="p_open" placeholder="Blank is fine if the job is complete. A guess is not."></textarea></div>
@@ -347,6 +357,10 @@ body.dd-locked #ddHubChip{display:none}
 
     <div class="sec">
       <div class="sec-hdr"><span class="badge">SIGN</span><h3>Signature and location</h3></div>
+      <div class="note red" id="ppwPaperSign"><span class="nh">Member signs on paper</span>
+        Print this page and have the member sign the printed copy. On-screen signing stays off until legal
+        approves it nationwide. Leave the copy with the member and take the signed page back for the dealer file.</div>
+      <div id="ppwEsign" style="display:none">
       <div class="note red"><span class="nh">Say this before they sign</span>
         Tell the member you are recording a signature on this device, and that the device&rsquo;s location
         and the time are recorded with it. If they would rather not, print the page and have them sign on
@@ -375,6 +389,7 @@ body.dd-locked #ddHubChip{display:none}
         It records where the <b>device</b> was, to the accuracy the phone reports, at the moment it was taken.
         It is not proof of who signed, not proof the member was present, and not a verification of the service
         address. The printed page says so in those words.</div>
+      </div>
     </div>
 
     <div class="sec">
@@ -875,6 +890,11 @@ function ppwBuild() {
     if (v("p_case")) pdf.kv("Case number", v("p_case"));
   }
 
+  if (chk("p_wochg") || v("p_wowhat")) {
+    pdf.h2("Changes from the work order");
+    pdf.body(v("p_wowhat") || "Changed on site \u2014 details not entered.", { size: 9.5 });
+  }
+
   pdf.gap(8);
   pdf.h2("Signatures");
   pdf.body("Signing confirms the work above was completed and the items above were explained. This is a service " +
@@ -945,6 +965,7 @@ try {
 
 function ppwPrint(mode) {
   if (!v("p_name")) { toast("Member name is needed on their copy."); return; }
+  if (chk("p_wochg") && !v("p_wowhat")) { toast("Say what changed from the work order."); return; }
   var bin;
   try { bin = ppwBuild(); }
   catch (e) { toast("Could not build the page."); return; }
@@ -1055,6 +1076,7 @@ function ppwText() {
   if (v("p_work")) out += "\n" + v("p_work") + "\n";
   if (v("p_open")) out += "\nLEFT OPEN: " + v("p_open") + "\n  Owner: " + (v("p_owner") || "UNASSIGNED") +
                           "   By: " + (v("p_due") || "NO DATE") + "\n";
+  if (chk("p_wochg") || v("p_wowhat")) out += "\nCHANGED FROM THE WORK ORDER: " + (v("p_wowhat") || "details not entered") + "\n";
   out += "\nNo account numbers, panel codes, passcodes or payment details are recorded.\n";
   return out;
 }
@@ -1444,7 +1466,14 @@ document.addEventListener("ddauth:open", function () { ppwSeed();
   });
 })();
 
-function boot() { ppwSeed(); }
+/* On-screen signing: off until legal approves it nationwide. Set to true only on that approval. */
+var PPW_ESIGN = false;
+function ppwSignMode() {
+  var e = el("ppwEsign"), n = el("ppwPaperSign");
+  if (e) e.style.display = PPW_ESIGN ? "" : "none";
+  if (n) n.style.display = PPW_ESIGN ? "none" : "";
+}
+function boot() { ppwSignMode(); ppwSeed(); }
 window.ppwAddRow = ppwAddRow; window.ppwPrint = ppwPrint; window.ppwCopy = ppwCopy;
 window.ppwClear = ppwClear; window.ppwTheme = ppwTheme;
 
